@@ -21,19 +21,13 @@ Then open:
 
 ## Runtime Configuration
 
-Non-dev startup requires environment-injected database and CORS settings:
+The application now uses only an in-memory H2 database for local startup and regular runtime. The only required external setting is CORS when you need a non-dev origin list:
 
-- `TRAVEL_DB_USERNAME`
-- `TRAVEL_DB_PASSWORD`
-- `TRAVEL_DB_JDBC_URL`
 - `TRAVEL_CORS_ORIGINS`
 
 Example PowerShell session:
 
 ```powershell
-$env:TRAVEL_DB_USERNAME = "travel_user"
-$env:TRAVEL_DB_PASSWORD = "change-me"
-$env:TRAVEL_DB_JDBC_URL = "jdbc:postgresql://localhost:5432/travel_db"
 $env:TRAVEL_CORS_ORIGINS = "https://app.example.com"
 mvn quarkus:dev
 ```
