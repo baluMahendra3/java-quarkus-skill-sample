@@ -111,6 +111,19 @@ class TripResourceTest {
                                 .body("details", hasItem(containsString("must be greater than or equal to 0")));
         }
 
+        @Test
+        @TestSecurity(user = "mgr", roles = {"MANAGER"})
+        void listTripsShouldRejectInvalidDateFilter() {
+                given()
+                                .queryParam("from", "2026-13-40")
+                                .queryParam("to", "2026-05-01")
+                                .when().get("/api/trips")
+                                .then()
+                                .statusCode(400)
+                                .body("error", equalTo("from must be a valid ISO-8601 date (yyyy-MM-dd)"))
+                                .body("status", equalTo(400));
+        }
+
     private Long createDriver() {
                 return given()
                                 .contentType(ContentType.JSON)
