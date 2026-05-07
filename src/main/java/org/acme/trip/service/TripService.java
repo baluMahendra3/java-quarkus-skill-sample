@@ -10,12 +10,17 @@ import org.acme.trip.dto.TripStatusUpdateResponse;
 import org.acme.trip.entity.Trip;
 import org.acme.trip.entity.TripStatus;
 import org.acme.trip.repository.TripRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @ApplicationScoped
 public class TripService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TripService.class);
 
     private final DriverService driverService;
     private final TripRepository tripRepository;
@@ -29,6 +34,7 @@ public class TripService {
     public Trip createTrip(Trip trip, String createdBy) {
         if (trip.customerName == null || trip.fromLocation == null
                 || trip.toLocation == null || trip.tripDate == null) {
+            LOG.warn("event=trip.create.invalidRequest missingRequiredFields=true");
             throw new ApiException(400, "customerName, fromLocation, toLocation, tripDate are required");
         }
         if (trip.driver != null && trip.driver.id != null) {
@@ -37,29 +43,50 @@ public class TripService {
         }
         trip.createdBy = createdBy;
         tripRepository.persist(trip);
+        LOG.info("event=trip.create.completed tripId={} createdBy={} hasDriver={}", trip.id, createdBy, trip.driver != null);
         return trip;
     }
 
     public List<Trip> listTrips(TripStatus status, Long driverId, String from, String to, Integer page, Integer size) {
         int pageIndex = resolvePage(page);
         int pageSize = resolveSize(size);
+        List<Trip> trips;
         if (driverId != null) {
-            return tripRepository.findByDriver(driverId, pageIndex, pageSize);
+            trips = tripRepository.findByDriver(driverId, pageIndex, pageSize);
         }
-        if (status != null) {
-            return tripRepository.findByStatus(status, pageIndex, pageSize);
+        else if (status != null) {
+            trips = tripRepository.findByStatus(status, pageIndex, pageSize);
         }
-        if (from != null && to != null) {
-            return tripRepository.findByDateRange(LocalDate.parse(from), LocalDate.parse(to), pageIndex, pageSize);
+        else if (from != null && to != null) {
+            trips = tripRepository.findByDateRange(
+                    parseDateFilter(from, "from"),
+                    parseDateFilter(to, "to"),
+                    pageIndex,
+                    pageSize
+            );
         }
-        return tripRepository.listTrips(pageIndex, pageSize);
+        else {
+            trips = tripRepository.listTrips(pageIndex, pageSize);
+        }
+        LOG.info(
+                "event=trip.list.completed status={} driverId={} hasDateRange={} page={} size={} resultCount={}",
+                status,
+                driverId,
+                from != null && to != null,
+                pageIndex,
+                pageSize,
+                trips.size()
+        );
+        return trips;
     }
 
     public Trip getTrip(Long id) {
         Trip trip = tripRepository.findById(id);
         if (trip == null) {
+            LOG.warn("event=trip.get.notFound tripId={}", id);
             throw new ApiException(404, "Trip not found");
         }
+        LOG.info("event=trip.get.completed tripId={} status={}", trip.id, trip.status);
         return trip;
     }
 
@@ -77,16 +104,19 @@ public class TripService {
         if (updated.driver != null && updated.driver.id != null) {
             trip.driver = resolveDriver(updated.driver.id);
         }
+        LOG.info("event=trip.update.completed tripId={} hasDriver={} status={}", trip.id, trip.driver != null, trip.status);
         return trip;
     }
 
     @Transactional
     public TripStatusUpdateResponse updateStatus(Long id, TripStatus status) {
         if (status == null) {
+            LOG.warn("event=trip.status.update.invalidRequest missingStatus=true tripId={}", id);
             throw new ApiException(400, "status query param required");
         }
         Trip trip = getTrip(id);
         trip.status = status;
+        LOG.info("event=trip.status.update.completed tripId={} status={}", trip.id, status);
         return new TripStatusUpdateResponse("Status updated", status);
     }
 
@@ -94,6 +124,7 @@ public class TripService {
     public MessageResponse cancelTrip(Long id) {
         Trip trip = getTrip(id);
         trip.status = TripStatus.CANCELLED;
+        LOG.info("event=trip.cancel.completed tripId={}", trip.id);
         return new MessageResponse("Trip cancelled");
     }
 
@@ -102,6 +133,7 @@ public class TripService {
             return driverService.getDriver(driverId);
         }
         catch (ApiException exception) {
+            LOG.warn("event=trip.driver.notFound driverId={}", driverId);
             throw new ApiException(400, "Driver not found");
         }
     }
@@ -124,5 +156,14 @@ public class TripService {
             throw new ApiException(400, "size must be between 1 and 100");
         }
         return size;
+    }
+
+    private LocalDate parseDateFilter(String value, String parameterName) {
+        try {
+            return LocalDate.parse(value);
+        }
+        catch (DateTimeParseException exception) {
+            throw new ApiException(400, parameterName + " must be a valid ISO-8601 date (yyyy-MM-dd)");
+        }
     }
 }

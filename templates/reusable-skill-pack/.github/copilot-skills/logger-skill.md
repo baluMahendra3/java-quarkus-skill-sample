@@ -46,6 +46,17 @@ Use this checklist for structured, safe, and actionable logging in Java + Quarku
 - Background jobs and async handlers must include job, batch, or message identifiers in every meaningful log.
 - Correlation context must be created at ingress, propagated across async boundaries, and cleared correctly after request completion.
 
+## API End-To-End Minimum
+
+- Every `/api` resource class should declare a logger.
+- Every `/api` resource class should emit at least one INFO, WARN, or ERROR event that helps operators trace request lifecycle or failure outcome.
+- Every service class under a `service` package should declare a logger.
+- Every service class under a `service` package should emit at least one INFO, WARN, or ERROR event for a business-significant transition or failure path.
+- For create, update, delete, auth, admin, and expensive read flows, prefer start and completion events with stable fields such as `event`, `requestId`, `principal`, `entityId`, `outcome`, and `durationMs`.
+- Do not log raw request DTOs, response DTOs, passwords, bearer tokens, cookies, or authorization headers to satisfy these requirements.
+- When a resource delegates to a service, avoid duplicate success logs with the same meaning; choose the boundary that best answers the operational question.
+- Failure logs should include safe identifiers and the operation name so support staff can reconstruct the path without reading stack traces first.
+
 ## Security and Compliance Rules
 
 - Never log secrets, passwords, tokens, API keys, or private credentials.
@@ -84,6 +95,22 @@ Use this checklist for structured, safe, and actionable logging in Java + Quarku
 - Do not log success messages from repositories or simple getters or mappers.
 - Do not use inconsistent event names for the same workflow.
 
+## Logger Anti-Patterns
+
+- Do not log raw request or response bodies by default, especially on auth or user-facing endpoints.
+- Do not treat INFO as a trace stream for every request on high-volume APIs.
+- Do not log the same exception in multiple layers and then rethrow it.
+- Do not log stack traces for expected validation, authorization, or business-rule failures.
+- Do not declare a logger in a resource or service class and then leave it unused.
+- Do not rely on free-text prose when stable fields such as `event`, `principal`, `entityId`, `outcome`, and `durationMs` are what operators need.
+- Do not manually concatenate strings when parameterized logging can preserve structure and avoid unnecessary allocations.
+- Do not log inside loops, polling paths, retries, or hot code paths without suppression, aggregation, or sampling.
+- Do not add routine success logs in repositories, mappers, or trivial helper methods.
+- Do not duplicate start and completion logs at both the resource and service boundary unless each one answers a different operational question.
+- Do not rename key event names casually after dashboards, searches, or alerts depend on them.
+- Do not ship production code without meaningful INFO, WARN, or ERROR events on business-significant API flows.
+- Do not use logs as a substitute for metrics, tracing, or safe API error payloads.
+
 ## Testing and Quality Gate
 
 - Critical failure paths assert expected log levels and key fields.
@@ -93,6 +120,8 @@ Use this checklist for structured, safe, and actionable logging in Java + Quarku
 - Observability dashboards and alerts are mapped to key events.
 - New features define which events are INFO, WARN, and ERROR before implementation is considered complete.
 - Log review rejects duplicate exception logging and noisy request-level INFO spam.
+- The skill compliance script currently enforces logger presence plus at least one operational INFO, WARN, or ERROR event in `/api` resources and `service` classes.
+- The skill compliance script does not prove event usefulness, structured field quality, correlation propagation, or duplication quality; review those manually.
 
 ## Reusable Prompts
 

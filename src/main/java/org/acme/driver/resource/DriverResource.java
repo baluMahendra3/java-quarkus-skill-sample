@@ -25,6 +25,8 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -48,6 +50,8 @@ import java.util.List;
 })
 public class DriverResource {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DriverResource.class);
+
     private final DriverService driverService;
 
     public DriverResource(DriverService driverService) {
@@ -67,6 +71,7 @@ public class DriverResource {
             content = @Content(schema = @Schema(implementation = DriverResponse.class))
         )
     public Response createDriver(@Valid DriverRequest request) {
+        LOG.info("event=driver.create.request");
         Driver driver = driverService.createDriver(DriverApiMapper.toEntity(request));
         return Response.status(Response.Status.CREATED).entity(DriverApiMapper.toResponse(driver)).build();
     }
@@ -89,6 +94,7 @@ public class DriverResource {
             @QueryParam("page") @Min(0) Integer page,
             @Parameter(description = "Maximum number of drivers per page", schema = @Schema(defaultValue = "50", minimum = "1", maximum = "100"))
             @QueryParam("size") @Min(1) @Max(100) Integer size) {
+        LOG.info("event=driver.list.request status={} page={} size={}", status, page != null ? page : 0, size != null ? size : 50);
         return driverService.listDrivers(status, page, size).stream()
                 .map(DriverApiMapper::toResponse)
                 .toList();
@@ -106,7 +112,10 @@ public class DriverResource {
             description = "Driver returned successfully",
             content = @Content(schema = @Schema(implementation = DriverResponse.class))
         )
-    public Response getDriver(@PathParam("id") Long id) {
+    public Response getDriver(
+            @Parameter(description = "Identifier of the driver to fetch", required = true, example = "101")
+            @PathParam("id") Long id) {
+        LOG.info("event=driver.get.request driverId={}", id);
         return Response.ok(DriverApiMapper.toResponse(driverService.getDriver(id))).build();
     }
 
@@ -123,7 +132,11 @@ public class DriverResource {
             description = "Driver updated successfully",
             content = @Content(schema = @Schema(implementation = DriverResponse.class))
         )
-    public Response updateDriver(@PathParam("id") Long id, @Valid DriverRequest request) {
+    public Response updateDriver(
+            @Parameter(description = "Identifier of the driver to update", required = true, example = "101")
+            @PathParam("id") Long id,
+            @Valid DriverRequest request) {
+        LOG.info("event=driver.update.request driverId={}", id);
         Driver driver = driverService.updateDriver(id, DriverApiMapper.toEntity(request));
         return Response.ok(DriverApiMapper.toResponse(driver)).build();
     }
@@ -141,7 +154,10 @@ public class DriverResource {
             description = "Driver deactivated successfully",
             content = @Content(schema = @Schema(implementation = MessageResponse.class))
     )
-    public Response deactivateDriver(@PathParam("id") Long id) {
+    public Response deactivateDriver(
+            @Parameter(description = "Identifier of the driver to deactivate", required = true, example = "101")
+            @PathParam("id") Long id) {
+        LOG.info("event=driver.deactivate.request driverId={}", id);
         return Response.ok(driverService.deactivateDriver(id)).build();
     }
 }

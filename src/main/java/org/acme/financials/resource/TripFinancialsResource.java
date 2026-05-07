@@ -19,6 +19,8 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Path("/api/trips/{tripId}/financials")
 @Produces(MediaType.APPLICATION_JSON)
@@ -39,6 +41,8 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
         content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 })
 public class TripFinancialsResource {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TripFinancialsResource.class);
 
     private final TripFinancialsService tripFinancialsService;
 
@@ -67,6 +71,7 @@ public class TripFinancialsResource {
         })
     public Response upsertFinancials(@PathParam("tripId") Long tripId, @Valid TripFinancialsRequest request) {
         boolean existing = tripFinancialsService.findFinancials(tripId).isPresent();
+        LOG.info("event=trip.financials.upsert.request tripId={} action={}", tripId, existing ? "update" : "create");
         TripFinancials financials = tripFinancialsService.upsertFinancials(
                 tripId,
                 TripFinancialsApiMapper.toEntity(request)
@@ -88,6 +93,7 @@ public class TripFinancialsResource {
             content = @Content(schema = @Schema(implementation = TripFinancialsResponse.class))
     )
     public Response getFinancials(@PathParam("tripId") Long tripId) {
+        LOG.info("event=trip.financials.get.request tripId={}", tripId);
         return Response.ok(TripFinancialsApiMapper.toResponse(tripFinancialsService.getFinancials(tripId))).build();
     }
 }

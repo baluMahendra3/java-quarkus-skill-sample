@@ -148,7 +148,12 @@ function Get-RelativeProjectPath {
         [string]$PathValue
     )
 
-    return $PathValue.Replace($ProjectRoot + '\\', '')
+    $normalizedRoot = $ProjectRoot.TrimEnd('\', '/')
+    if ($PathValue.StartsWith($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $PathValue.Substring($normalizedRoot.Length).TrimStart('\', '/')
+    }
+
+    return $PathValue
 }
 
 function Test-Pattern {
@@ -175,6 +180,102 @@ function Test-Pattern {
     }
     else {
         Add-Result -Category $Category -Status "PASS" -Message $Description
+    }
+}
+
+function Test-ApiOperationalLogging {
+    param(
+        [string]$BasePath,
+        [string]$ResourceFilePattern
+    )
+
+    if (-not (Test-Path $BasePath)) {
+        Add-Result -Category "Logger" -Status "FAIL" -Message ("Operational logging scan base path not found: {0}" -f $BasePath)
+        return
+    }
+
+    $loggerDeclarationPattern = "(?m)\b(?:private|protected|public)?\s*(?:static\s+final\s+)?(?:Logger|org\.jboss\.logging\.Logger|org\.slf4j\.Logger)\s+(?:LOG|LOGGER|log|logger)\b|@Inject\s+(?:Logger|org\.jboss\.logging\.Logger|org\.slf4j\.Logger)\s+(?:LOG|LOGGER|log|logger)\b"
+    $operationalLogPattern = "(?i)\b(LOG|LOGGER|log|logger)\s*\.\s*(info|warn|error)\s*\("
+    $apiPathPattern = '@Path\s*\(\s*"/api(?:/|")'
+
+    $resourceLoggerFailures = @()
+    $resourceOperationalFailures = @()
+    $serviceLoggerFailures = @()
+    $serviceOperationalFailures = @()
+
+    $apiResourceFiles = @(
+        Get-ChildItem -Path $BasePath -Recurse -File -Filter $ResourceFilePattern |
+            Where-Object {
+                $content = Get-Content -Path $_.FullName -Raw
+                $content -match $apiPathPattern
+            }
+    )
+
+    foreach ($file in $apiResourceFiles) {
+        $content = Get-Content -Path $file.FullName -Raw
+        $relativePath = Get-RelativeProjectPath -PathValue $file.FullName
+
+        if ($content -notmatch $loggerDeclarationPattern) {
+            $resourceLoggerFailures += $relativePath
+        }
+
+        if ($content -notmatch $operationalLogPattern) {
+            $resourceOperationalFailures += $relativePath
+        }
+    }
+
+    $serviceFiles = @(
+        Get-ChildItem -Path $BasePath -Recurse -File -Filter "*Service.java" |
+            Where-Object { $_.DirectoryName -match '[\\/]service([\\/]|$)' }
+    )
+
+    foreach ($file in $serviceFiles) {
+        $content = Get-Content -Path $file.FullName -Raw
+        $relativePath = Get-RelativeProjectPath -PathValue $file.FullName
+
+        if ($content -notmatch $loggerDeclarationPattern) {
+            $serviceLoggerFailures += $relativePath
+        }
+
+        if ($content -notmatch $operationalLogPattern) {
+            $serviceOperationalFailures += $relativePath
+        }
+    }
+
+    if ($resourceLoggerFailures.Count -eq 0) {
+        Add-Result -Category "Logger" -Status "PASS" -Message "API resource classes should declare a logger for operational flow tracing"
+    }
+    else {
+        foreach ($path in $resourceLoggerFailures) {
+            Add-Result -Category "Logger" -Status "FAIL" -Message ("API resource classes should declare a logger for operational flow tracing: {0}" -f $path)
+        }
+    }
+
+    if ($resourceOperationalFailures.Count -eq 0) {
+        Add-Result -Category "Logger" -Status "PASS" -Message "API resource classes should emit at least one INFO, WARN, or ERROR log for request lifecycle or failure handling"
+    }
+    else {
+        foreach ($path in $resourceOperationalFailures) {
+            Add-Result -Category "Logger" -Status "FAIL" -Message ("API resource classes should emit at least one INFO, WARN, or ERROR log for request lifecycle or failure handling: {0}" -f $path)
+        }
+    }
+
+    if ($serviceLoggerFailures.Count -eq 0) {
+        Add-Result -Category "Logger" -Status "PASS" -Message "Service classes should declare a logger for business-flow tracing"
+    }
+    else {
+        foreach ($path in $serviceLoggerFailures) {
+            Add-Result -Category "Logger" -Status "FAIL" -Message ("Service classes should declare a logger for business-flow tracing: {0}" -f $path)
+        }
+    }
+
+    if ($serviceOperationalFailures.Count -eq 0) {
+        Add-Result -Category "Logger" -Status "PASS" -Message "Service classes should emit at least one INFO, WARN, or ERROR log for business-significant transitions or failures"
+    }
+    else {
+        foreach ($path in $serviceOperationalFailures) {
+            Add-Result -Category "Logger" -Status "FAIL" -Message ("Service classes should emit at least one INFO, WARN, or ERROR log for business-significant transitions or failures: {0}" -f $path)
+        }
     }
 }
 
@@ -896,9 +997,11 @@ Add-ManualReviewItem -Message "Security completeness, authorization coverage, an
 Add-ManualReviewItem -Message "Concurrency safety under real load still requires design review and, where relevant, load or stress testing."
 Add-ManualReviewItem -Message "Performance suitability for higher volume still requires profiling or load testing; static checks only catch obvious issues."
 Add-ManualReviewItem -Message "Swagger contract quality, examples, and implementation-to-spec drift still require human review."
+Add-ManualReviewItem -Message "Correlation IDs, event names, structured fields, and duplicate logging across layers still require human review."
 
 Add-NotImplementedItem -Message "The current auto-fix mode only applies low-risk mechanical fixes, such as creating missing layer directories."
 Add-NotImplementedItem -Message "Pattern violations such as DTO leakage, direct persistence access, or missing pagination are reported but not rewritten automatically."
+Add-NotImplementedItem -Message "Useful API flow logging is enforced only as a presence check; event quality, field selection, and correlation propagation are not auto-generated."
 
 Test-ModulePackageStructure -BasePath $mainSourceRootPath -RequiredDirectories $RequiredDirectories -ExcludeModules $ExcludeModules
 
@@ -920,6 +1023,7 @@ Test-SingleFilePatternAbsence -Category "Security" -Description "Sensitive base 
 Test-ResourceAuthorizationAnnotations -BasePath $mainSourceRootPath -ResourceFilePattern $ResourceFilePattern
 Test-SingleFilePatternAbsence -Category "Logger" -Description "Base SQL logging should stay disabled outside dev or test profiles" -FilePath $applicationPropertiesPath -Pattern "(?im)^(?!\s*#)(?!%dev\.)(?!%test\.)quarkus\.hibernate-orm\.log\.sql\s*=\s*true"
 Test-Pattern -Category "Logger" -Description "Application logs should not include passwords, tokens, secrets, or authorization headers" -SearchBasePath $mainSourceRootPath -IncludeFilter "*.java" -Pattern "(?i)(logger|LOGGER|LOG|log)\s*\.\s*(trace|debug|info|warn|error)\s*\([^\n;]*\b(password|passwd|token|authorization|secret|api[-_ ]?key|credential|cookie)\b"
+Test-ApiOperationalLogging -BasePath $mainSourceRootPath -ResourceFilePattern $ResourceFilePattern
 Test-SingleFilePatternPresence -Category "Swagger" -Description "OpenAPI dependency should be declared in pom.xml" -FilePath $pomPathValue -Pattern "<artifactId>quarkus-smallrye-openapi</artifactId>"
 Test-SingleFilePatternPresence -Category "Swagger" -Description "OpenAPI info title should be configured" -FilePath $applicationPropertiesPath -Pattern "(?m)^quarkus\.smallrye-openapi\.info-title\s*="
 Test-SingleFilePatternPresence -Category "Swagger" -Description "OpenAPI info version should be configured" -FilePath $applicationPropertiesPath -Pattern "(?m)^quarkus\.smallrye-openapi\.info-version\s*="
@@ -968,6 +1072,19 @@ $previewDir = Split-Path -Path $previewPathValue -Parent
 if (-not (Test-Path $previewDir)) {
     New-Item -ItemType Directory -Path $previewDir | Out-Null
 }
+
+$loggerReviewChecklist = @(
+    "API resources declare a logger.",
+    "Service classes declare a logger.",
+    "Each business-significant API flow has at least one useful INFO, WARN, or ERROR event.",
+    "Logs avoid passwords, tokens, cookies, credentials, and authorization headers.",
+    "Logs avoid raw request and response body dumping by default.",
+    "Failure logs include safe identifiers and operation context.",
+    "Duplicate success or exception logs across resource and service boundaries are avoided.",
+    "Key events use stable names and machine-searchable fields such as event, principal, entityId, outcome, and durationMs.",
+    "Correlation or request identifiers are present where end-to-end tracing is required.",
+    "High-volume or looped code paths do not emit unbounded INFO noise."
+)
 
 $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 $passes = @($results | Where-Object Status -eq "PASS")
@@ -1049,6 +1166,12 @@ foreach ($item in $manualReviewItems) {
     $report += "- $item"
 }
 $report += ""
+$report += "## Logger Review Checklist"
+$report += ""
+foreach ($item in $loggerReviewChecklist) {
+    $report += "- [ ] $item"
+}
+$report += ""
 $report += "## Not Implemented And Why"
 $report += ""
 foreach ($item in $notImplementedItems) {
@@ -1085,6 +1208,13 @@ if ($AutoFix -and $autoFixedItems.Count -gt 0) {
     foreach ($item in $autoFixedItems) {
         $preview += "- [$($item.Category)] $($item.Message)"
     }
+}
+
+$preview += ""
+$preview += "## Logger Review Checklist"
+$preview += ""
+foreach ($item in $loggerReviewChecklist) {
+    $preview += "- [ ] $item"
 }
 
 Set-Content -Path $previewPathValue -Value $preview -Encoding UTF8

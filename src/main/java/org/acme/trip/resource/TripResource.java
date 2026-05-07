@@ -27,6 +27,8 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -50,6 +52,8 @@ import java.util.List;
 })
 public class TripResource {
 
+    private static final Logger LOG = LoggerFactory.getLogger(TripResource.class);
+
     private final TripService tripService;
     private final JsonWebToken jwt;
 
@@ -71,6 +75,7 @@ public class TripResource {
             content = @Content(schema = @Schema(implementation = TripResponse.class))
         )
     public Response createTrip(@Valid TripRequest request) {
+        LOG.info("event=trip.create.request principal={}", jwt.getSubject());
         Trip trip = TripApiMapper.toEntity(request);
         return Response.status(Response.Status.CREATED)
                 .entity(TripApiMapper.toResponse(tripService.createTrip(trip, jwt.getSubject()))).build();
@@ -100,6 +105,14 @@ public class TripResource {
             @QueryParam("page") @Min(0) Integer page,
             @Parameter(description = "Maximum number of trips per page", schema = @Schema(defaultValue = "50", minimum = "1", maximum = "100"))
             @QueryParam("size") @Min(1) @Max(100) Integer size) {
+            LOG.info(
+                "event=trip.list.request status={} driverId={} hasDateRange={} page={} size={}",
+                status,
+                driverId,
+                from != null && to != null,
+                page != null ? page : 0,
+                size != null ? size : 50
+            );
         return tripService.listTrips(status, driverId, from, to, page, size).stream()
                 .map(TripApiMapper::toResponse)
                 .toList();
@@ -118,6 +131,7 @@ public class TripResource {
             content = @Content(schema = @Schema(implementation = TripResponse.class))
         )
     public Response getTrip(@PathParam("id") Long id) {
+        LOG.info("event=trip.get.request tripId={}", id);
         return Response.ok(TripApiMapper.toResponse(tripService.getTrip(id))).build();
     }
 
@@ -135,6 +149,7 @@ public class TripResource {
             content = @Content(schema = @Schema(implementation = TripResponse.class))
         )
     public Response updateTrip(@PathParam("id") Long id, @Valid TripRequest request) {
+        LOG.info("event=trip.update.request tripId={}", id);
         Trip trip = tripService.updateTrip(id, TripApiMapper.toEntity(request));
         return Response.ok(TripApiMapper.toResponse(trip)).build();
     }
@@ -152,6 +167,7 @@ public class TripResource {
             content = @Content(schema = @Schema(implementation = TripStatusUpdateResponse.class))
         )
     public Response updateStatus(@PathParam("id") Long id, @QueryParam("status") TripStatus status) {
+        LOG.info("event=trip.status.update.request tripId={} status={}", id, status);
         return Response.ok(tripService.updateStatus(id, status)).build();
     }
 
@@ -169,6 +185,7 @@ public class TripResource {
             content = @Content(schema = @Schema(implementation = MessageResponse.class))
     )
     public Response cancelTrip(@PathParam("id") Long id) {
+        LOG.info("event=trip.cancel.request tripId={}", id);
         return Response.ok(tripService.cancelTrip(id)).build();
     }
 }

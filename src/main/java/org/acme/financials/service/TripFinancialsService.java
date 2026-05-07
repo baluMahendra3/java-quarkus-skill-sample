@@ -7,11 +7,15 @@ import org.acme.financials.entity.TripFinancials;
 import org.acme.financials.repository.TripFinancialsRepository;
 import org.acme.trip.entity.Trip;
 import org.acme.trip.service.TripService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
 
 @ApplicationScoped
 public class TripFinancialsService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TripFinancialsService.class);
 
     private final TripService tripService;
     private final TripFinancialsRepository tripFinancialsRepository;
@@ -26,6 +30,7 @@ public class TripFinancialsService {
         Trip trip = resolveTrip(tripId);
 
         Optional<TripFinancials> existing = tripFinancialsRepository.findByTripId(tripId);
+        boolean created = existing.isEmpty();
         TripFinancials financials = existing.orElse(new TripFinancials());
         financials.trip = trip;
 
@@ -35,9 +40,10 @@ public class TripFinancialsService {
         if (data.driverAllowance != null) financials.driverAllowance = data.driverAllowance;
         if (data.otherExpenses != null) financials.otherExpenses = data.otherExpenses;
 
-        if (existing.isEmpty()) {
+        if (created) {
             tripFinancialsRepository.persist(financials);
         }
+        LOG.info("event=trip.financials.upsert.completed tripId={} action={}", tripId, created ? "create" : "update");
         return financials;
     }
 
@@ -46,8 +52,13 @@ public class TripFinancialsService {
     }
 
     public TripFinancials getFinancials(Long tripId) {
-        return findFinancials(tripId)
-                .orElseThrow(() -> new ApiException(404, "No financials recorded for this trip"));
+        Optional<TripFinancials> financials = findFinancials(tripId);
+        if (financials.isEmpty()) {
+            LOG.warn("event=trip.financials.get.notFound tripId={}", tripId);
+            throw new ApiException(404, "No financials recorded for this trip");
+        }
+        LOG.info("event=trip.financials.get.completed tripId={}", tripId);
+        return financials.get();
     }
 
     private Trip resolveTrip(Long tripId) {
@@ -55,6 +66,7 @@ public class TripFinancialsService {
             return tripService.getTrip(tripId);
         }
         catch (ApiException exception) {
+            LOG.warn("event=trip.financials.tripNotFound tripId={}", tripId);
             throw new ApiException(404, "Trip not found");
         }
     }

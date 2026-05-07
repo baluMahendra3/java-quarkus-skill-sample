@@ -27,6 +27,8 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -49,6 +51,8 @@ import java.util.List;
         content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 })
 public class AuthResource {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AuthResource.class);
 
     private final AuthService authService;
 
@@ -74,6 +78,7 @@ public class AuthResource {
             content = @Content(schema = @Schema(implementation = RegisterResponse.class))
         )
     public Response register(@Valid RegisterRequest request) {
+        LOG.info("event=auth.register.request role={}", request.role != null ? request.role : "MANAGER");
         return Response.status(Response.Status.CREATED)
                 .entity(authService.register(request)).build();
     }
@@ -96,6 +101,7 @@ public class AuthResource {
             content = @Content(schema = @Schema(implementation = LoginResponse.class))
         )
     public Response login(@Valid LoginRequest request) {
+        LOG.info("event=auth.login.request");
         return Response.ok(authService.login(request)).build();
     }
 
@@ -118,6 +124,7 @@ public class AuthResource {
             @QueryParam("page") @Min(0) Integer page,
             @Parameter(description = "Maximum number of users per page", schema = @Schema(defaultValue = "50", minimum = "1", maximum = "100"))
             @QueryParam("size") @Min(1) @Max(100) Integer size) {
+        LOG.info("event=auth.users.list.request page={} size={}", page != null ? page : 0, size != null ? size : 50);
         return authService.listUsers(page, size).stream()
                 .map(AuthApiMapper::toResponse)
                 .toList();
@@ -137,7 +144,10 @@ public class AuthResource {
             description = "User deactivated successfully",
             content = @Content(schema = @Schema(implementation = MessageResponse.class))
     )
-    public Response deactivateUser(@PathParam("id") Long id) {
+    public Response deactivateUser(
+            @Parameter(description = "Identifier of the user account to deactivate", required = true, example = "42")
+            @PathParam("id") Long id) {
+        LOG.info("event=auth.user.deactivate.request userId={}", id);
         return Response.ok(authService.deactivateUser(id)).build();
     }
 }

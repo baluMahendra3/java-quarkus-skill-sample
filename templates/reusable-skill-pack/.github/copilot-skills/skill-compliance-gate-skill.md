@@ -38,7 +38,7 @@ Use this workflow as the final pass after any code change.
 - Testing skill: build-integrated JaCoCo coverage verification with a 95% line coverage threshold.
 - Exception Handling skill: no generic `RuntimeException` or `Exception` throws in main code, no raw `exception.getMessage()` leakage in exception mappers, and presence checks for shared exception mappers.
 - Security skill: JWT verification config presence, non-wildcard base CORS checks, non-dev secret placeholder checks in `application.properties`, and required authorization annotations on `/api` resource endpoints.
-- Logger skill: obvious sensitive-data logging patterns in Java and non-dev SQL logging checks.
+- Logger skill: obvious sensitive-data logging patterns in Java, non-dev SQL logging checks, logger presence in `/api` resources and `service` classes, and at least one INFO, WARN, or ERROR operational event in those classes.
 - Swagger skill: OpenAPI dependency presence, OpenAPI metadata presence, shared security-scheme presence, class or endpoint-level OpenAPI annotations across `/api` resources, pagination parameter documentation on list endpoints, and rejection of vague object response schemas where concrete models should exist.
 - Maven skill: no `LATEST` or `RELEASE` versions or version ranges, explicit build-plugin versions, and required Surefire or JaCoCo plugin presence.
 - Maven skill: build-integrated coverage must be wired into the actual test runner, but the script does not yet fully validate JaCoCo `argLine` propagation into Surefire or Failsafe.
@@ -51,7 +51,7 @@ Use this workflow as the final pass after any code change.
 - Code Design Principles skill: cohesion, SOLID, contract clarity, and cyclic-dependency review still need human judgment.
 - Exception Handling skill: deeper business vs technical exception taxonomy, error-code design, and safe logging boundaries still need human judgment.
 - Security skill: authz completeness, validation depth, abuse protection, and dependency vulnerability review are still not fully verified by this script.
-- Logger skill: correlation IDs, structured logging shape, event catalog quality, and duplication across layers are not statically enforced by this script.
+- Logger skill: correlation IDs, structured logging shape, event catalog quality, field usefulness, and duplication across layers are not fully enforced by this script.
 - Swagger skill: examples, response-schema quality, and implementation-to-spec drift are not fully checked here.
 - Maven skill: dependency duplication, unused dependency cleanup, and full CI parity still need human review unless the configured command checks them explicitly.
 - Maven skill: JaCoCo agent propagation into the test JVM still needs human review; plugin presence alone is not enough if coverage wiring is missing.
@@ -136,6 +136,7 @@ Use this workflow as the final pass after any code change.
 - Auto-fixed items
 - Proposed auto-fixes
 - Manual-review items
+- Logger review checklist
 - Not implemented and why
 - Better approach recommendation
 

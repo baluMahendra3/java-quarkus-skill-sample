@@ -16,6 +16,8 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Path("/api/dashboard")
 @Produces(MediaType.APPLICATION_JSON)
@@ -31,6 +33,8 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
         content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 })
 public class DashboardResource {
+
+    private static final Logger LOG = LoggerFactory.getLogger(DashboardResource.class);
 
     private final DashboardService dashboardService;
 
@@ -50,7 +54,8 @@ public class DashboardResource {
             content = @Content(schema = @Schema(implementation = DashboardSummary.class))
         )
     public DashboardSummary getDashboard() {
-        return DashboardApiMapper.toResponse(dashboardService.getDashboard());
+        LOG.info("event=dashboard.summary.request");
+        return buildDashboardSummary();
     }
 
     @GET
@@ -66,6 +71,11 @@ public class DashboardResource {
             content = @Content(schema = @Schema(implementation = DashboardSummary.class))
         )
     public DashboardSummary getFinancialSummary() {
-        return getDashboard();
+        LOG.info("event=dashboard.financialSummary.request");
+        return buildDashboardSummary();
+    }
+
+    private DashboardSummary buildDashboardSummary() {
+        return DashboardApiMapper.toResponse(dashboardService.getDashboard());
     }
 }
