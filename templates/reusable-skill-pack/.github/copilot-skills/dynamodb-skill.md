@@ -6,6 +6,8 @@ Use this checklist when designing and operating AWS DynamoDB-backed applications
 
 - Focus: table design, key modeling, access patterns, consistency, scaling, and cost control.
 - Pair with Java, Quarkus, and Maven skills for implementation and runtime guidance.
+- Verify business correctness before optimizing throughput or cost.
+- Favor access-pattern-driven reasoning over blanket rules.
 
 ## Defaults
 
@@ -14,6 +16,24 @@ Use this checklist when designing and operating AWS DynamoDB-backed applications
 - Use on-demand capacity first unless workload is predictable.
 - Enable Point-in-Time Recovery for production tables.
 - Encrypt at rest and use IAM least-privilege policies.
+
+## Working Approach
+
+### Start With The Real Question
+
+- Identify what items are actually needed before proposing keys, GSIs, or filters.
+- Clarify which attributes are truly required on the read path.
+- Determine whether the flow is transactional, operational, or analytical.
+- Consider likely traffic shape, item counts, and partition-key distribution before optimizing.
+- Do not optimize an access pattern that answers the wrong business question.
+
+### Validate Logical Correctness First
+
+- Check that the proposed key design returns the right entity set before discussing cost or speed.
+- Check for item-shape or access-pattern assumptions that would force scans or post-read filtering.
+- Check whether consistency choice changes the correctness of the result.
+- Check whether pagination, sort-key design, and filter usage preserve the intended result semantics.
+- If the access pattern is logically wrong, fix that before tuning throughput, GSIs, or retry behavior.
 
 ## Data Modeling Rules
 
@@ -30,6 +50,7 @@ Use this checklist when designing and operating AWS DynamoDB-backed applications
 - Use FilterExpression only after key-based narrowing.
 - Paginate responses using LastEvaluatedKey.
 - Avoid hot partitions by spreading high-write keys.
+- Prefer concrete reasoning from partition distribution, item size, consistency choice, and request frequency instead of guesswork.
 
 ## Write and Consistency Rules
 
@@ -62,6 +83,16 @@ Use this checklist when designing and operating AWS DynamoDB-backed applications
 - Use sparse indexes for selective query use cases.
 - Batch reads/writes where request patterns allow.
 - Review and remove unused GSIs and stale attributes.
+
+## Review Order
+
+1. Does the access pattern return the correct items?
+2. Are the required attributes and item shapes explicit?
+3. Is the partition-key and sort-key design aligned with real traffic?
+4. Are scans, filters, or GSIs being used for the right reason?
+5. Are consistency, retry, and transaction choices justified?
+6. Are cost and hot-partition risks understood?
+7. Is there a simpler table or index design that still satisfies the use case?
 
 ## Reusable Prompts
 
